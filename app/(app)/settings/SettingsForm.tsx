@@ -20,6 +20,7 @@ export default function SettingsForm({ biz, mailReady }: { biz: BusinessProfile;
     terms: biz.terms ?? "",
     warranty: biz.warranty ?? "",
     website: biz.website ?? "",
+    state: biz.state ?? "",
   });
   const [err, setErr] = useState("");
   const [saved, setSaved] = useState(false);
@@ -58,6 +59,9 @@ export default function SettingsForm({ biz, mailReady }: { biz: BusinessProfile;
         <Field label="Address" className="sm:col-span-2">
           <textarea className={inputCls} rows={2} value={f.address} onChange={set("address")} />
         </Field>
+        <Field label="State" hint="Printed as Place of Supply on every bill.">
+          <input className={inputCls} value={f.state} onChange={set("state")} placeholder="Maharashtra" />
+        </Field>
       </section>
 
       <section className="grid gap-4 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-black/5 sm:grid-cols-2 sm:p-7">
@@ -86,8 +90,8 @@ export default function SettingsForm({ biz, mailReady }: { biz: BusinessProfile;
         <Field label="Warranty text (printed when an invoice has a frame number)" className="sm:col-span-2">
           <textarea className={inputCls} rows={3} value={f.warranty} onChange={set("warranty")} />
         </Field>
-        <Field label="Terms & thank-you note" className="sm:col-span-2">
-          <textarea className={inputCls} rows={3} value={f.terms} onChange={set("terms")} />
+        <Field label="Terms & Conditions (one point per line)" className="sm:col-span-2">
+          <textarea className={inputCls} rows={6} value={f.terms} onChange={set("terms")} />
         </Field>
       </section>
 
@@ -97,13 +101,13 @@ export default function SettingsForm({ biz, mailReady }: { biz: BusinessProfile;
           <li>
             <b>Email:</b>{" "}
             {mailReady ? <span className="font-semibold text-[#3c8a24]">ready</span> : <span className="font-semibold text-[#b3261e]">not set up</span>} — needs <code className="rounded bg-black/5 px-1">SMTP_USER</code> and{" "}
-            <code className="rounded bg-black/5 px-1">SMTP_PASS</code> (a Gmail App password) in the server settings.
+            <code className="rounded bg-black/5 px-1">SMTP_PASS</code> (a Gmail App password) in the server settings. The email carries the PDF as an attachment.
           </li>
           <li>
-            <b>WhatsApp:</b> opens WhatsApp with the invoice link ready to send — nothing to set up.
+            <b>WhatsApp:</b> on a phone, the invoice PDF is attached to the message; on a computer WhatsApp opens with the message and a link to the PDF. Nothing to set up.
           </li>
           <li>
-            <b>Link &amp; print:</b> every invoice has a public link and a print / save-as-PDF view.
+            <b>Link &amp; print:</b> every invoice has a public link where the customer can download the PDF, and a Download PDF button for you.
           </li>
         </ul>
       </section>

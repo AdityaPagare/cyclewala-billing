@@ -199,7 +199,10 @@ function DayRow({ s, rec, onSave, onClear, bare = false }: { s: StaffMember; rec
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#0a0a0c] font-extrabold text-white">{s.name.slice(0, 1).toUpperCase()}</span>
             <div className="min-w-0">
               <p className="truncate font-extrabold">{s.name}</p>
-              <p className="truncate text-xs text-black/50">{s.role}</p>
+              <p className="truncate text-xs text-black/50">
+                {s.role}
+                {rec?.source === "self" ? <span className="ml-2 rounded-full bg-[#4CAF2E]/15 px-2 py-0.5 text-[10px] font-extrabold text-[#3c8a24]">marked by self</span> : null}
+              </p>
             </div>
           </div>
         ) : null}

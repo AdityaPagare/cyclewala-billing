@@ -5,9 +5,10 @@ import { useState } from "react";
 import Icon from "@/components/Icon";
 import { Empty, ErrorNote, Field, Modal, api, btnDanger, btnGhost, btnPrimary, inputCls } from "@/components/ui";
 import { day, inr, today } from "@/lib/format";
+import StaffLoginForm from "./StaffLoginForm";
 import type { Advance, StaffMember } from "@/lib/types";
 
-type Row = StaffMember & { advanceOwed: number };
+type Row = StaffMember & { advanceOwed: number; username?: string };
 const EMPTY = { name: "", phone: "", role: "", salaryType: "monthly", salary: "", joinedOn: today(), active: true };
 const PER: Record<string, string> = { monthly: "per month", daily: "per day", hourly: "per hour" };
 
@@ -15,11 +16,13 @@ export default function StaffView({ staff, advances }: { staff: Row[]; advances:
   const router = useRouter();
   const [edit, setEdit] = useState<Row | "new" | null>(null);
   const [adv, setAdv] = useState<Row | null>(null);
+  const [login, setLogin] = useState<Row | null>(null);
   const names = new Map(staff.map((s) => [s._id, s.name]));
   const active = staff.filter((s) => s.active);
   const done = () => {
     setEdit(null);
     setAdv(null);
+    setLogin(null);
     router.refresh();
   };
 
@@ -65,12 +68,19 @@ export default function StaffView({ staff, advances }: { staff: Row[]; advances:
                 </div>
                 {s.advanceOwed > 0 ? <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-extrabold text-amber-800">advance {inr(s.advanceOwed)}</span> : null}
               </div>
-              <div className="mt-4 flex gap-2">
+              <p className={`mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold ${s.username ? "bg-[#eef7ea] text-[#3c8a24]" : "bg-black/[0.04] text-black/50"}`}>
+                <span className={`h-2 w-2 rounded-full ${s.username ? "bg-[#4CAF2E]" : "bg-black/25"}`} />
+                {s.username ? `Can mark own attendance · ${s.username}` : "No attendance login yet"}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
                 <button className={btnGhost} onClick={() => setEdit(s)}>
                   Edit
                 </button>
                 <button className={btnGhost} onClick={() => setAdv(s)} disabled={!s.active}>
                   Give advance
+                </button>
+                <button className={btnGhost} onClick={() => setLogin(s)} disabled={!s.active}>
+                  {s.username ? "Reset login" : "Give login"}
                 </button>
               </div>
             </div>
@@ -112,6 +122,7 @@ export default function StaffView({ staff, advances }: { staff: Row[]; advances:
 
       {edit ? <StaffForm row={edit === "new" ? null : edit} onClose={() => setEdit(null)} onSaved={done} /> : null}
       {adv ? <AdvanceForm row={adv} onClose={() => setAdv(null)} onSaved={done} /> : null}
+      {login ? <StaffLoginForm who={login} onClose={() => setLogin(null)} onSaved={done} /> : null}
     </div>
   );
 }

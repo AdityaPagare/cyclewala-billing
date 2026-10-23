@@ -33,6 +33,7 @@ export async function createInvoice(input: InvoiceInput): Promise<Invoice> {
   const party = input.partyId ? await parties().get(input.partyId) : null;
   if (input.partyId && !party) throw new Error("That party no longer exists.");
   const t = computeTotals(input.lines, { gst: biz.gstEnabled, interState: biz.gstEnabled && input.interState });
+  const previousBalance = party ? (await partyBalances()).get(party._id) ?? 0 : undefined;
 
   // numbering: prefix + counter, advanced once per invoice
   const n = biz.nextInvoiceNumber;
@@ -63,6 +64,7 @@ export async function createInvoice(input: InvoiceInput): Promise<Invoice> {
     paid: 0,
     status: "unpaid",
     notes: input.notes,
+    previousBalance,
     shares: [],
     createdAt: now,
   });
@@ -138,24 +140,36 @@ export async function recordPayment(p: {
   return { payments: made };
 }
 
-/** What a party owes (+) or is owed (-): opening balance + their sales - what they have paid. */
+export const quotations = () => col<Invoice>("quotations");
+export const purchases = () => col<Invoice>("purchases");
+
+/** What a party owes us (+) or what we owe them (-): opening balance + our sales - their payments to us
+ *  - our purchases from them + our payments to them. */
 export async function partyBalances(): Promise<Map<string, number>> {
-  const [ps, invs, pays] = await Promise.all([parties().all(), invoices().all(), payments().all()]);
+  const [ps, invs, pays, buys] = await Promise.all([parties().all(), invoices().all(), payments().all(), purchases().all()]);
   const bal = new Map<string, number>(ps.map((p) => [p._id, p.openingBalance]));
-  for (const i of invs) if (i.partyId && i.kind === "sale" && i.status !== "cancelled") bal.set(i.partyId, round2((bal.get(i.partyId) ?? 0) + i.total));
-  for (const pay of pays) if (pay.partyId && pay.direction === "in") bal.set(pay.partyId, round2((bal.get(pay.partyId) ?? 0) - pay.amount));
+  const add = (id: string | undefined, by: number) => id && bal.set(id, round2((bal.get(id) ?? 0) + by));
+  for (const i of invs) if (i.kind === "sale" && i.status !== "cancelled") add(i.partyId, i.total);
+  for (const b of buys) if (b.status !== "cancelled") add(b.partyId, -b.total);
+  for (const p of pays) add(p.partyId, p.direction === "in" ? -p.amount : p.amount);
   return bal;
 }
 
 export type LedgerRow = { date: string; at: string; label: string; ref: string; debit: number; credit: number; balance: number };
 
+/** debit = "you gave" (a sale on credit, or money you paid out); credit = "you got" (money received, or goods you bought) */
 export async function ledgerFor(partyId: string): Promise<{ party: Party; rows: LedgerRow[]; balance: number } | null> {
   const party = await parties().get(partyId);
   if (!party) return null;
-  const [invs, pays] = await Promise.all([invoices().all(), payments().all()]);
+  const [invs, pays, buys] = await Promise.all([invoices().all(), payments().all(), purchases().all()]);
   const raw: Omit<LedgerRow, "balance">[] = [];
   for (const i of invs) if (i.partyId === partyId && i.kind === "sale" && i.status !== "cancelled") raw.push({ date: i.date, at: i.createdAt, label: "Sales invoice", ref: i.number, debit: i.total, credit: 0 });
-  for (const p of pays) if (p.partyId === partyId && p.direction === "in") raw.push({ date: p.date, at: p.createdAt, label: `Payment received (${p.mode})`, ref: p.reference || "", debit: 0, credit: p.amount });
+  for (const b of buys) if (b.partyId === partyId && b.status !== "cancelled") raw.push({ date: b.date, at: b.createdAt, label: "Purchase bill", ref: b.supplierBillNo ? `${b.number} (bill ${b.supplierBillNo})` : b.number, debit: 0, credit: b.total });
+  for (const p of pays) {
+    if (p.partyId !== partyId) continue;
+    if (p.direction === "in") raw.push({ date: p.date, at: p.createdAt, label: `Payment received (${p.mode})`, ref: p.reference || "", debit: 0, credit: p.amount });
+    else raw.push({ date: p.date, at: p.createdAt, label: `Payment made (${p.mode})`, ref: p.reference || "", debit: p.amount, credit: 0 });
+  }
   raw.sort((a, b) => a.date.localeCompare(b.date) || a.at.localeCompare(b.at));
   let bal = party.openingBalance;
   const rows = raw.map((r) => ({ ...r, balance: (bal = round2(bal + r.debit - r.credit)) }));

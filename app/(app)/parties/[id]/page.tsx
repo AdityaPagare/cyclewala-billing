@@ -24,8 +24,8 @@ export default async function LedgerPage({ params }: { params: Promise<{ id: str
           </p>
         </div>
         <div className="ml-auto rounded-2xl bg-white px-6 py-4 text-right shadow-sm ring-1 ring-black/5">
-          <p className="text-xs font-bold uppercase tracking-wider text-black/50">{balance > 0 ? "They owe you" : balance < 0 ? "Advance with you" : "Settled"}</p>
-          <p className={`text-3xl font-extrabold ${balance > 0 ? "text-[#b3261e]" : "text-[#3c8a24]"}`}>{inr(Math.abs(balance))}</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-black/50">{balance > 0 ? "They owe you" : balance < 0 ? "You owe them" : "Settled"}</p>
+          <p className={`text-3xl font-extrabold ${balance !== 0 ? "text-[#b3261e]" : "text-[#3c8a24]"}`}>{inr(Math.abs(balance))}</p>
         </div>
       </div>
 
@@ -37,8 +37,8 @@ export default async function LedgerPage({ params }: { params: Promise<{ id: str
             <tr>
               <th className="px-5 py-3">Date</th>
               <th className="px-3 py-3">Details</th>
-              <th className="px-3 py-3 text-right">Billed</th>
-              <th className="px-3 py-3 text-right">Received</th>
+              <th className="px-3 py-3 text-right">You gave</th>
+              <th className="px-3 py-3 text-right">You got</th>
               <th className="px-5 py-3 text-right">Balance</th>
             </tr>
           </thead>
@@ -67,7 +67,7 @@ export default async function LedgerPage({ params }: { params: Promise<{ id: str
             {rows.length === 0 && party.openingBalance === 0 ? (
               <tr>
                 <td colSpan={5} className="px-5 py-10 text-center text-black/50">
-                  No invoices or payments yet.
+                  No invoices, purchases or payments yet.
                 </td>
               </tr>
             ) : null}

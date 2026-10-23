@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -77,6 +78,9 @@ export default function LoginPage() {
         >
           {busy ? "Signing in…" : "Sign in"}
         </button>
+        <p className="mt-5 text-center text-sm text-black/50">
+          Staff? <Link href="/staff-login" className="font-bold text-[#3c8a24] hover:underline">Sign in to mark attendance</Link>
+        </p>
       </form>
     </main>
   );

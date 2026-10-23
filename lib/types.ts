@@ -18,6 +18,9 @@ export type BusinessProfile = {
   /** invoice numbers look like INV-0001: prefix + zero-padded counter */
   invoicePrefix: string;
   nextInvoiceNumber: number;
+  /** quotations are numbered QT-0001, purchase bills PB-0001 */
+  nextQuotationNumber?: number;
+  nextPurchaseNumber?: number;
   /** print theme: "classic" | "modern" | "thermal" */
   invoiceTheme: string;
   upiId?: string;
@@ -25,6 +28,8 @@ export type BusinessProfile = {
   /** printed in the warranty box on every invoice */
   warranty?: string;
   website?: string;
+  /** printed as "Place of Supply" on the bill */
+  state?: string;
 };
 
 /* ---- parties ---- */
@@ -67,7 +72,8 @@ export type Item = {
 
 /* ---- invoices ---- */
 export type InvoiceKind = "sale" | "quotation" | "purchase" | "sale-return";
-export type InvoiceStatus = "draft" | "unpaid" | "partial" | "paid" | "cancelled";
+/** sales and purchase bills: unpaid / partial / paid / cancelled. Quotations: open / converted / cancelled. */
+export type InvoiceStatus = "draft" | "open" | "converted" | "unpaid" | "partial" | "paid" | "cancelled";
 
 export type InvoiceLine = {
   itemId?: Id;
@@ -111,6 +117,12 @@ export type Invoice = {
   paid: number;
   status: InvoiceStatus;
   notes?: string;
+  /** purchase bills: the number printed on the supplier's own bill */
+  supplierBillNo?: string;
+  /** sales: what the customer owed before this bill was made (printed as "Previous Balance") */
+  previousBalance?: number;
+  /** quotations: the invoice it was turned into */
+  convertedTo?: Id;
   /** every time the invoice was sent: { channel, at, to } */
   shares: { channel: "email" | "whatsapp" | "sms" | "link" | "print"; at: string; to?: string }[];
   createdAt: string;
@@ -157,6 +169,8 @@ export type AttendanceRecord = {
   overtimeHours?: number;
   lateMinutes?: number;
   note?: string;
+  /** "self" when the staff member marked it themselves from their own login */
+  source?: "self";
 };
 
 /** money given to a staff member in advance, taken back from their salary */
@@ -200,4 +214,15 @@ export type PayrollEntry = {
   paidOn?: string;
   mode?: PaymentMode;
   createdAt: string;
+};
+
+/** a staff member's own login for marking attendance (the password is only ever kept as a salted hash) */
+export type StaffLogin = {
+  /** same as the staff member's id */
+  _id: Id;
+  username: string;
+  salt: string;
+  hash: string;
+  createdAt: string;
+  lastLogin?: string;
 };

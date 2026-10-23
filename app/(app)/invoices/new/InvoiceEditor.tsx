@@ -13,8 +13,17 @@ let seq = 1;
 const blank = (): Row => ({ key: seq++, itemId: "", name: "", hsn: "", serial: "", qty: "1", unit: "pcs", rate: "", discountPct: "", gstRate: 0 });
 const n = (s: string) => (s.trim() === "" || Number.isNaN(Number(s)) ? 0 : Number(s));
 
-export default function InvoiceEditor({ parties, items, gstOn, startParty }: { parties: Party[]; items: Item[]; gstOn: boolean; startParty?: string }) {
+export type EditorMode = "sale" | "quotation" | "purchase";
+const COPY: Record<EditorMode, { title: string; lead: string; who: string; whoName: string; dateLabel: string; dueLabel: string; save: string; api: string; list: string; paid: string; state: string }> = {
+  sale: { title: "New sales invoice", lead: "Pick the customer, add items, save — then print or send it.", who: "Customer", whoName: "Customer name (optional)", dateLabel: "Invoice date", dueLabel: "Due date", save: "Save invoice", api: "/api/invoices", list: "/invoices", paid: "Amount received now (₹)", state: "Customer is in another state (charge IGST)" },
+  quotation: { title: "New quotation", lead: "An estimate for the customer. Stock does not change until you turn it into an invoice.", who: "Customer", whoName: "Customer name (optional)", dateLabel: "Quotation date", dueLabel: "Valid until", save: "Save quotation", api: "/api/quotations", list: "/quotations", paid: "", state: "Customer is in another state (charge IGST)" },
+  purchase: { title: "New purchase bill", lead: "A bill from a supplier. Saving it adds the goods to your stock.", who: "Supplier", whoName: "Supplier name", dateLabel: "Bill date", dueLabel: "Due date", save: "Save purchase bill", api: "/api/purchases", list: "/purchases", paid: "Amount paid now (₹)", state: "Supplier is in another state (IGST)" },
+};
+
+export default function InvoiceEditor({ parties, items, gstOn, startParty, mode = "sale" }: { parties: Party[]; items: Item[]; gstOn: boolean; startParty?: string; mode?: EditorMode }) {
   const router = useRouter();
+  const C = COPY[mode];
+  const [billNo, setBillNo] = useState("");
   const [partyId, setPartyId] = useState(startParty && parties.some((p) => p._id === startParty) ? startParty : "");
   const [walkIn, setWalkIn] = useState("");
   const [date, setDate] = useState(today());
@@ -23,7 +32,7 @@ export default function InvoiceEditor({ parties, items, gstOn, startParty }: { p
   const [rows, setRows] = useState<Row[]>([blank()]);
   const [notes, setNotes] = useState("");
   const [paidNow, setPaidNow] = useState("");
-  const [mode, setMode] = useState("cash");
+  const [payMode, setPayMode] = useState("cash");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -47,7 +56,8 @@ export default function InvoiceEditor({ parties, items, gstOn, startParty }: { p
   const pick = (key: number, id: string) => {
     const it = items.find((i) => i._id === id);
     if (!it) return patch(key, { itemId: "" });
-    patch(key, { itemId: it._id, name: it.name, hsn: it.hsn ?? "", unit: it.unit, rate: String(it.salePrice), gstRate: it.gstRate });
+    const rate = mode === "purchase" ? (it.purchasePrice ? String(it.purchasePrice) : "") : String(it.salePrice);
+    patch(key, { itemId: it._id, name: it.name, hsn: it.hsn ?? "", unit: it.unit, rate, gstRate: it.gstRate });
   };
 
   const save = async (e: React.FormEvent) => {
@@ -56,7 +66,8 @@ export default function InvoiceEditor({ parties, items, gstOn, startParty }: { p
     const lines = rows.filter((r) => r.name.trim());
     if (lines.length === 0) return setErr("Add at least one item.");
     setBusy(true);
-    const r = await api<Invoice>("/api/invoices", "POST", {
+    const r = await api<Invoice>(C.api, "POST", {
+      supplierBillNo: mode === "purchase" ? billNo : undefined,
       partyId: partyId || undefined,
       walkInName: walkIn,
       date,
@@ -64,34 +75,34 @@ export default function InvoiceEditor({ parties, items, gstOn, startParty }: { p
       interState,
       notes,
       paidNow,
-      paidMode: mode,
+      paidMode: payMode,
       lines: lines.map((l) => ({ itemId: l.itemId || undefined, name: l.name, hsn: l.hsn, serial: l.serial, qty: n(l.qty), unit: l.unit, rate: n(l.rate), discountPct: n(l.discountPct), gstRate: l.gstRate })),
     });
     setBusy(false);
     if (r.ok) {
-      router.push(`/invoices/${r.data._id}`);
+      router.push(`${C.list}/${r.data._id}`);
       router.refresh();
     } else setErr(r.error);
   };
 
   const stockWarn = (r: Row) => {
     const it = items.find((i) => i._id === r.itemId);
-    return it && !it.isService && n(r.qty) > it.stock ? `Only ${it.stock} ${it.unit} in stock` : "";
+    return mode === "sale" && it && !it.isService && n(r.qty) > it.stock ? `Only ${it.stock} ${it.unit} in stock` : "";
   };
 
   return (
     <form onSubmit={save} className="space-y-6">
       <div>
-        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">New sales invoice</h1>
-        <p className="text-black/60">Pick the customer, add items, save — then print or send it.</p>
+        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{C.title}</h1>
+        <p className="text-black/60">{C.lead}</p>
       </div>
 
       <section className="grid gap-4 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-black/5 sm:grid-cols-4">
-        <Field label="Customer" className="sm:col-span-2">
+        <Field label={C.who} className="sm:col-span-2">
           <select className={inputCls} value={partyId} onChange={(e) => setPartyId(e.target.value)}>
-            <option value="">Walk-in customer</option>
+            <option value="">{mode === "purchase" ? "Choose a supplier…" : "Walk-in customer"}</option>
             {parties
-              .filter((p) => p.kind !== "supplier")
+              .filter((p) => (mode === "purchase" ? p.kind !== "customer" : p.kind !== "supplier"))
               .map((p) => (
                 <option key={p._id} value={p._id}>
                   {p.name}
@@ -101,22 +112,27 @@ export default function InvoiceEditor({ parties, items, gstOn, startParty }: { p
           </select>
         </Field>
         {!partyId ? (
-          <Field label="Customer name (optional)" className="sm:col-span-2">
-            <input className={inputCls} value={walkIn} onChange={(e) => setWalkIn(e.target.value)} placeholder="Walk-in customer" />
+          <Field label={C.whoName} className="sm:col-span-2">
+            <input className={inputCls} value={walkIn} onChange={(e) => setWalkIn(e.target.value)} placeholder={mode === "purchase" ? "Or type a supplier name" : "Walk-in customer"} />
           </Field>
         ) : (
           <div className="hidden sm:col-span-2 sm:block" />
         )}
-        <Field label="Invoice date">
+        <Field label={C.dateLabel}>
           <input className={inputCls} type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
         </Field>
-        <Field label="Due date">
+        <Field label={C.dueLabel}>
           <input className={inputCls} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </Field>
+        {mode === "purchase" ? (
+          <Field label="Supplier's bill number" className="sm:col-span-2">
+            <input className={inputCls} value={billNo} onChange={(e) => setBillNo(e.target.value)} placeholder="Printed on their bill (optional)" />
+          </Field>
+        ) : null}
         {gstOn ? (
           <label className="flex items-center gap-3 text-sm font-bold sm:col-span-2">
             <input type="checkbox" className="h-5 w-5 accent-[#4CAF2E]" checked={interState} onChange={(e) => setInterState(e.target.checked)} />
-            Customer is in another state (charge IGST)
+            {C.state}
           </label>
         ) : null}
       </section>
@@ -147,7 +163,7 @@ export default function InvoiceEditor({ parties, items, gstOn, startParty }: { p
                   ))}
                 </select>
                 <input className={`${inputCls} mt-2`} value={r.name} onChange={(e) => patch(r.key, { name: e.target.value, itemId: r.itemId && items.find((i) => i._id === r.itemId)?.name === e.target.value ? r.itemId : "" })} placeholder="Item name" aria-label="Item name" />
-                <input className={`${inputCls} mt-2`} value={r.serial} onChange={(e) => patch(r.key, { serial: e.target.value })} placeholder="Frame / serial no. (for warranty, optional)" aria-label="Frame or serial number" />
+                {mode !== "purchase" ? <input className={`${inputCls} mt-2`} value={r.serial} onChange={(e) => patch(r.key, { serial: e.target.value })} placeholder="Frame / serial no. (for warranty, optional)" aria-label="Frame or serial number" /> : null}
                 {stockWarn(r) ? <p className="mt-1 text-xs font-semibold text-[#b3261e]">{stockWarn(r)}</p> : null}
               </div>
               <input className={inputCls} inputMode="decimal" value={r.qty} onChange={(e) => patch(r.key, { qty: e.target.value })} aria-label="Quantity" placeholder="Qty" />
@@ -166,15 +182,16 @@ export default function InvoiceEditor({ parties, items, gstOn, startParty }: { p
 
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <section className="space-y-4 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-black/5">
-          <Field label="Notes (shown on the invoice)">
+          <Field label="Notes (shown on the document)">
             <textarea className={inputCls} rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </Field>
+          {mode !== "quotation" ? (
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Amount received now (₹)" hint="Leave empty if nothing is paid yet.">
+            <Field label={C.paid} hint="Leave empty if nothing is paid yet.">
               <input className={inputCls} inputMode="decimal" value={paidNow} onChange={(e) => setPaidNow(e.target.value)} />
             </Field>
             <Field label="Paid by">
-              <select className={inputCls} value={mode} onChange={(e) => setMode(e.target.value)}>
+              <select className={inputCls} value={payMode} onChange={(e) => setPayMode(e.target.value)}>
                 <option value="cash">Cash</option>
                 <option value="upi">UPI</option>
                 <option value="card">Card</option>
@@ -183,6 +200,7 @@ export default function InvoiceEditor({ parties, items, gstOn, startParty }: { p
               </select>
             </Field>
           </div>
+          ) : null}
         </section>
 
         <section className="space-y-2 rounded-3xl bg-[#0a0a0c] p-6 text-white shadow-sm">
@@ -196,16 +214,16 @@ export default function InvoiceEditor({ parties, items, gstOn, startParty }: { p
             <span className="text-sm font-bold uppercase tracking-wider text-white/60">Total</span>
             <span className="text-3xl font-extrabold text-[#67DD25]">{inr(t.total)}</span>
           </div>
-          {n(paidNow) > 0 ? <Line k="Balance after payment" v={inr(Math.max(0, t.total - n(paidNow)))} /> : null}
+          {mode !== "quotation" && n(paidNow) > 0 ? <Line k="Balance after payment" v={inr(Math.max(0, t.total - n(paidNow)))} /> : null}
         </section>
       </div>
 
       <ErrorNote text={err} />
       <div className="flex flex-wrap gap-3">
         <button className={btnPrimary} disabled={busy}>
-          {busy ? "Saving…" : "Save invoice"}
+          {busy ? "Saving…" : C.save}
         </button>
-        <button type="button" className={btnGhost} onClick={() => router.push("/invoices")}>
+        <button type="button" className={btnGhost} onClick={() => router.push(C.list)}>
           Cancel
         </button>
       </div>

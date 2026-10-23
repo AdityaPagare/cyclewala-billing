@@ -23,7 +23,7 @@ export function cleanInvoice(b: Record<string, unknown>): { value: InvoiceInput 
     lines.push({ itemId: str(l.itemId, 60) || undefined, name, hsn: str(l.hsn, 20) || undefined, serial: str(l.serial, 60) || undefined, qty, unit: str(l.unit, 12) || "pcs", rate, discountPct, gstRate });
   }
   const date = isDay(b.date) ? b.date : null;
-  if (!date) return { error: "Choose the invoice date." };
+  if (!date) return { error: "Choose the date." };
   if (b.dueDate && !isDay(b.dueDate)) return { error: "The due date is not valid." };
   const paidNow = b.paidNow === "" || b.paidNow == null ? 0 : num(b.paidNow, 0, 1e9);
   if (paidNow === null) return { error: "Amount received must be a number." };
