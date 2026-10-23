@@ -30,6 +30,9 @@ function secret(): string | null {
   return process.env.NODE_ENV !== "production" ? DEV.secret : null;
 }
 
+/** the key sessions are signed with (null when it is not configured in production) */
+export const sessionSecret = secret;
+
 const digest = (s: string) => createHash("sha256").update(s).digest();
 const same = (a: string, b: string) => timingSafeEqual(digest(a), digest(b));
 

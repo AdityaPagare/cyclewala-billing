@@ -73,9 +73,11 @@ const CHIP: Record<string, string> = {
   unpaid: "bg-red-100 text-red-800",
   cancelled: "bg-black/10 text-black/60",
   draft: "bg-black/10 text-black/60",
+  open: "bg-amber-100 text-amber-800",
+  converted: "bg-green-100 text-green-800",
 };
 export function StatusChip({ status }: { status: string }) {
-  return <span className={`rounded-full px-2.5 py-1 text-xs font-extrabold capitalize ${CHIP[status] ?? CHIP.draft}`}>{status === "partial" ? "part paid" : status}</span>;
+  return <span className={`rounded-full px-2.5 py-1 text-xs font-extrabold capitalize ${CHIP[status] ?? CHIP.draft}`}>{status === "partial" ? "part paid" : status === "converted" ? "invoiced" : status}</span>;
 }
 
 export function Empty({ title, note, children }: { title: string; note: string; children?: React.ReactNode }) {

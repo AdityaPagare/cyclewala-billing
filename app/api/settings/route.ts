@@ -35,9 +35,10 @@ export async function PUT(req: NextRequest) {
     invoicePrefix: prefix,
     nextInvoiceNumber: Math.floor(next),
     upiId: str(b.upiId, 80) || undefined,
-    terms: text(b.terms, 600) || undefined,
+    terms: text(b.terms, 1200) || undefined,
     warranty: text(b.warranty, 800) || undefined,
     website: str(b.website, 80) || undefined,
+    state: str(b.state, 60) || undefined,
   });
   return NextResponse.json(saved);
 }

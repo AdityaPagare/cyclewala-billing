@@ -14,7 +14,8 @@ export const recordId = (staffId: string, date: string) => `${staffId}_${date}`;
 export async function saveAttendance(r: Omit<AttendanceRecord, "_id">): Promise<AttendanceRecord> {
   const id = recordId(r.staffId, r.date);
   const doc = { ...r, _id: id } as AttendanceRecord;
-  if (await attendanceCol().get(id)) return (await attendanceCol().update(id, doc))!;
+  // replace the whole day (an update would keep old fields such as `source` that the new mark leaves out)
+  if (await attendanceCol().get(id)) await attendanceCol().remove(id);
   return attendanceCol().insert(doc);
 }
 

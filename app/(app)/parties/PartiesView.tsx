@@ -17,12 +17,14 @@ export default function PartiesView({ parties }: { parties: PartyRow[] }) {
   const [filter, setFilter] = useState<"all" | "owe" | "suppliers">("all");
   const [edit, setEdit] = useState<PartyRow | "new" | null>(null);
   const [pay, setPay] = useState<PartyRow | null>(null);
+  const [payOut, setPayOut] = useState<PartyRow | null>(null);
 
   const list = useMemo(() => {
     const s = q.trim().toLowerCase();
     return parties.filter((p) => (!s || `${p.name} ${p.phone} ${p.email ?? ""}`.toLowerCase().includes(s)) && (filter === "all" || (filter === "owe" ? p.balance > 0 : p.kind !== "customer")));
   }, [parties, q, filter]);
   const toCollect = parties.reduce((n, p) => n + Math.max(0, p.balance), 0);
+  const toPay = parties.reduce((n, p) => n + Math.max(0, -p.balance), 0);
 
   return (
     <div className="space-y-5">
@@ -30,7 +32,7 @@ export default function PartiesView({ parties }: { parties: PartyRow[] }) {
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Parties</h1>
           <p className="text-black/60">
-            {parties.length} {parties.length === 1 ? "party" : "parties"} · to collect <b className="text-[#b3261e]">{inr(toCollect)}</b>
+            {parties.length} {parties.length === 1 ? "party" : "parties"} · to collect <b className="text-[#b3261e]">{inr(toCollect)}</b> · to pay <b className="text-[#b3261e]">{inr(toPay)}</b>
           </p>
         </div>
         <button className={`${btnPrimary} ml-auto`} onClick={() => setEdit("new")}>
@@ -78,13 +80,18 @@ export default function PartiesView({ parties }: { parties: PartyRow[] }) {
                   <td className="px-3 py-3 capitalize">{p.kind}</td>
                   <td className={`px-3 py-3 text-right font-extrabold ${p.balance > 0 ? "text-[#b3261e]" : p.balance < 0 ? "text-[#3c8a24]" : "text-black/40"}`}>
                     {inr(Math.abs(p.balance))}
-                    <span className="ml-1 text-xs font-semibold">{p.balance > 0 ? "to collect" : p.balance < 0 ? "advance" : ""}</span>
+                    <span className="ml-1 text-xs font-semibold">{p.balance > 0 ? "to collect" : p.balance < 0 ? "you owe" : ""}</span>
                   </td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex justify-end gap-2">
                       {p.balance > 0 ? (
                         <button className={btnGhost} onClick={() => setPay(p)}>
                           Receive
+                        </button>
+                      ) : null}
+                      {p.balance < 0 ? (
+                        <button className={btnGhost} onClick={() => setPayOut(p)}>
+                          Pay
                         </button>
                       ) : null}
                       <button className={btnGhost} onClick={() => setEdit(p)}>
@@ -108,6 +115,7 @@ export default function PartiesView({ parties }: { parties: PartyRow[] }) {
 
       {edit ? <PartyForm party={edit === "new" ? null : edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); router.refresh(); }} /> : null}
       {pay ? <ReceiveForm party={pay} onClose={() => setPay(null)} onSaved={() => { setPay(null); router.refresh(); }} /> : null}
+      {payOut ? <ReceiveForm out party={payOut} onClose={() => setPayOut(null)} onSaved={() => { setPayOut(null); router.refresh(); }} /> : null}
     </div>
   );
 }
@@ -188,8 +196,9 @@ function PartyForm({ party, onClose, onSaved }: { party: PartyRow | null; onClos
   );
 }
 
-export function ReceiveForm({ party, onClose, onSaved }: { party: { _id: string; name: string; balance: number }; onClose: () => void; onSaved: () => void }) {
-  const [amount, setAmount] = useState(String(Math.max(0, party.balance) || ""));
+/** receive money from a party, or with `out` pay a supplier */
+export function ReceiveForm({ party, out = false, onClose, onSaved }: { party: { _id: string; name: string; balance: number }; out?: boolean; onClose: () => void; onSaved: () => void }) {
+  const [amount, setAmount] = useState(String((out ? Math.max(0, -party.balance) : Math.max(0, party.balance)) || ""));
   const [mode, setMode] = useState("cash");
   const [date, setDate] = useState(today());
   const [reference, setReference] = useState("");
@@ -200,19 +209,27 @@ export function ReceiveForm({ party, onClose, onSaved }: { party: { _id: string;
     e.preventDefault();
     setBusy(true);
     setErr("");
-    const r = await api("/api/payments", "POST", { partyId: party._id, amount, mode, date, reference });
+    const r = await api("/api/payments", "POST", { partyId: party._id, amount, mode, date, reference, direction: out ? "out" : "in" });
     setBusy(false);
     if (r.ok) onSaved();
     else setErr(r.error);
   };
 
   return (
-    <Modal title={`Receive payment from ${party.name}`} onClose={onClose}>
+    <Modal title={out ? `Pay ${party.name}` : `Receive payment from ${party.name}`} onClose={onClose}>
       <form onSubmit={save} className="grid gap-4 sm:grid-cols-2">
         <p className="text-sm text-black/60 sm:col-span-2">
-          Outstanding <b>{inr(Math.max(0, party.balance))}</b>. The amount goes against their oldest unpaid invoices first.
+          {out ? (
+            <>
+              You owe <b>{inr(Math.max(0, -party.balance))}</b>. The amount goes against their oldest unpaid purchase bills first.
+            </>
+          ) : (
+            <>
+              Outstanding <b>{inr(Math.max(0, party.balance))}</b>. The amount goes against their oldest unpaid invoices first.
+            </>
+          )}
         </p>
-        <Field label="Amount received (₹) *">
+        <Field label={out ? "Amount paid (₹) *" : "Amount received (₹) *"}>
           <input className={inputCls} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus required />
         </Field>
         <Field label="Paid by">

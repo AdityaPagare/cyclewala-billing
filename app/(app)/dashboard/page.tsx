@@ -2,7 +2,8 @@ import Link from "next/link";
 import Icon from "@/components/Icon";
 import { StatusChip } from "@/components/ui";
 import { dbConfigured } from "@/lib/db";
-import { day, inr, today } from "@/lib/format";
+import { day, inr } from "@/lib/format";
+import { istNow } from "@/lib/ist";
 import { byNewest, invoices, items, partyBalances } from "@/lib/invoices";
 import { PHASES, SECTIONS } from "@/lib/nav";
 import { attendanceCol, staffCol } from "@/lib/staff";
@@ -12,23 +13,27 @@ export const metadata = { title: "Dashboard — Cycle Wala Billing" };
 export default async function Dashboard() {
   const [invs, its, bal, staff, marks] = await Promise.all([invoices().all(), items().all(), partyBalances(), staffCol().all(), attendanceCol().all()]);
   const team = staff.filter((s) => s.active);
-  const todayMarks = marks.filter((r) => r.date === today());
+  const todayMarks = marks.filter((r) => r.date === istNow().date);
   const presentToday = todayMarks.filter((r) => r.status === "present" || r.status === "half-day").length;
   const notMarked = team.filter((s) => !todayMarks.some((r) => r.staffId === s._id)).length;
   const live = invs.filter((i) => i.kind === "sale" && i.status !== "cancelled");
   const toCollect = [...bal.values()].reduce((n, b) => n + Math.max(0, b), 0);
-  const todays = live.filter((i) => i.date === today());
+  const toPay = [...bal.values()].reduce((n, b) => n + Math.max(0, -b), 0);
+  const todays = live.filter((i) => i.date === istNow().date);
   const low = its.filter((i) => !i.isService && i.lowStockAt !== undefined && i.stock <= i.lowStockAt);
   const recent = [...invs].filter((i) => i.kind === "sale").sort(byNewest).slice(0, 6);
 
   const cards = [
     { label: "To collect", value: inr(toCollect), note: "Unpaid from customers", tone: "text-[#b3261e]" },
+    { label: "To pay", value: inr(toPay), note: "Owed to suppliers", tone: toPay > 0 ? "text-[#b3261e]" : "text-[#0a0a0c]" },
     { label: "Today's sales", value: inr(todays.reduce((n, i) => n + i.total, 0)), note: `${todays.length} invoice${todays.length === 1 ? "" : "s"} today`, tone: "text-[#3c8a24]" },
     { label: "Staff present", value: `${presentToday} / ${team.length}`, note: team.length === 0 ? "Add your staff" : notMarked ? `${notMarked} not marked yet` : "Everyone marked", tone: "text-[#0a0a0c]" },
     { label: "Low stock", value: String(low.length), note: low.length ? "Items to reorder" : "All stocked up", tone: low.length ? "text-[#b3261e]" : "text-[#0a0a0c]" },
   ];
   const quick = [
     { href: "/invoices/new", label: "Create invoice", icon: "receipt" },
+    { href: "/quotations/new", label: "New quotation", icon: "file" },
+    { href: "/purchases/new", label: "Add purchase", icon: "truck" },
     { href: "/parties", label: "Add party", icon: "users" },
     { href: "/items", label: "Add item", icon: "box" },
     { href: "/payments", label: "Record payment", icon: "rupee" },
@@ -49,7 +54,7 @@ export default async function Dashboard() {
         </div>
       )}
 
-      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <section className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         {cards.map((c) => (
           <div key={c.label} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/5">
             <p className="text-sm font-semibold text-black/55">{c.label}</p>
@@ -61,7 +66,7 @@ export default async function Dashboard() {
 
       <section>
         <h2 className="mb-3 text-lg font-extrabold">Quick actions</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
           {quick.map((q) => (
             <Link key={q.href} href={q.href} className="group flex flex-col items-start gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5 transition hover:-translate-y-0.5 hover:ring-[#4CAF2E]">
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#4CAF2E]/12 text-[#3c8a24] group-hover:bg-[#4CAF2E] group-hover:text-white">

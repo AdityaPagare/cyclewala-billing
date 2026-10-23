@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cleanStaff } from "@/lib/clean-staff";
 import { bad, body, deny, sameOrigin } from "@/lib/guard";
 import { advancesCol, attendanceCol, payrollCol, staffCol } from "@/lib/staff";
+import { loginsCol } from "@/lib/staff-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -27,5 +28,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (att.some((r) => r.staffId === id) || adv.some((a) => a.staffId === id) || pay.some((p) => p.staffId === id)) {
     return bad("This person has attendance or salary records, so they can't be deleted. Mark them inactive instead.", 409);
   }
+  await loginsCol().remove(id);
   return (await staffCol().remove(id)) ? NextResponse.json({ ok: true }) : bad("Staff member not found.", 404);
 }
